@@ -1,5 +1,4 @@
 CDB (Constant DataBase) indexing and retrieval tools for FASTA files
-=====================================================================
 
 This is a brief introduction to a couple of platform independent file-based
 hashing tools (cdbfasta and cdbyank) that can be used for creating indices for
@@ -18,21 +17,12 @@ big-endian or little-endian architectures) and even Windows.
 
 1.Install instructions
 ===============================
-Before running 'make' in the source directory, please take a look at 
-the Makefile and note the following:
+Clone this repository and run 'make' in the cdbfasta directory. 
+Make sure you have the zlib library and development files installed on your linux system.
 
-* GCLDIR must point to the directory containing the gclib source
-  files (should be included in this source package already as a subdirectory)
-* in order to support record compression, change the BASEFLAGS variable
-  to have -DENABLE_COMPRESSION=1 instead of -DENABLE_COMPRESSION=0 
-  (default is: no compression support)
-* if compression was enabled, ZDIR should point to the directory where the 
-  zlib library (libz.a and all the zlib header files like zlib.h) can be found. 
-  This is only needed if your system does not have the zlib library installed 
-  already (most systems do). In case you get zlib related errors when you try 
-  to compile cdbfasta you might have to download zlib and install/build it 
-  in a directory that should then be specified as ZDIR in the Makefile
-
+Note: if no compression support is needed, change the BASEFLAGS variable in the Makefile
+to have -DENABLE_COMPRESSION=0 instead of -DENABLE_COMPRESSION=0 
+  
 Running 'make' should produce the binaries 'cdbfasta' (the indexer program) 
 and 'cdbyank' (the query program) in the current directory.
 
@@ -206,9 +196,9 @@ records.
 These tools were developed in C++, based on the publicly available cdb
 ("constant database") code written by D.J. Bernstein
 (http://cr.yp.to/djb.html). "Constant databases" are those that we don't need
-to  add to or remove records from. The original C source was (rather crudely)
+to add to or remove records from. The original C source was (rather crudely)
 wrapped into C++ classes and adjusted to automatically index fasta records and
-to create an external index instead of compacting  the original data file like
+to create an external index instead of storing the original data records like
 the original cdb library code does.  Also the "endianness" is now checked at
 runtime and the bytes are swapped accordingly such that the file offsets and
 record sizes are always  read/written in the same way in the index file. 
