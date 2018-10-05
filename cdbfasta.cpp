@@ -109,8 +109,8 @@ char* wordJunk=NULL;
 bool caseInsensitive=false; //case insensitive storage
 bool useStopWords=false;
 unsigned int numFields=0;
-// we have fields[numFields-1]=MAX_UINT as defined in gcdb.h -- 
-// as an indicator of taking every single token in the defline, 
+// we have fields[numFields-1]=MAX_UINT as defined in gcdb.h --
+// as an indicator of taking every single token in the defline,
 // or for open ended ranges (e.g. -f5- )
 unsigned int fields[255]; //array of numFields field indices (1-based)
 GHash<int> stopList;
@@ -151,7 +151,7 @@ void die_fastqformat(const char* seqid, int seqlen, int qvlen) {
 
 
 bool add_cdbkey(char* key, off_t fpos, uint32 reclen, int16_t linelen=0, byte elen=0) {
- 
+
  unsigned int klen=strlen(key);
  if (fpos==last_cdbfpos && strcmp(key, lastKey)==0) return true;
  if (klen<1) {
@@ -171,17 +171,17 @@ bool add_cdbkey(char* key, off_t fpos, uint32 reclen, int16_t linelen=0, byte el
      //record with line len
     CIdxSeqData recdata;
     recdata.fpos=gcvt_offt(&v);
-    recdata.reclen=gcvt_uint(&reclen);  
+    recdata.reclen=gcvt_uint(&reclen);
     recdata.linelen=gcvt_int16(&linelen);
     recdata.elen=elen;
     if (cdbidx->addrec(key,klen,(char*)&recdata,IdxSeqDataSIZE)==-1)
       GError("Error adding cdb record with key '%s'\n",key);
      }
-   
+
    else { //plain record */
     CIdxData recdata;
     recdata.fpos=gcvt_offt(&v);
-    recdata.reclen=gcvt_uint(&reclen);  
+    recdata.reclen=gcvt_uint(&reclen);
     if (cdbidx->addrec(key,klen,(char*)&recdata,IdxDataSIZE)==-1)
       GError("Error adding cdb record with key '%s'\n",key);
     //}
@@ -211,7 +211,7 @@ bool add_cdbkey(char* key, off_t fpos, uint32 reclen, int16_t linelen=0, byte el
  return true;
 }
 
-//default indexing: key directly passed -- 
+//default indexing: key directly passed --
 // as the first space delimited token
 void addKey(char* key, off_t fpos,
              uint32 reclen) {
@@ -219,13 +219,13 @@ void addKey(char* key, off_t fpos,
  add_cdbkey(key, fpos, reclen);
  if (caseInsensitive) {
    char* lckey=loCase(key);
-   if (strcmp(lckey, key)!=0) 
+   if (strcmp(lckey, key)!=0)
       add_cdbkey(lckey, fpos, reclen);
    GFREE(lckey);
    }
 }
 
-//the whole defline is passed 
+//the whole defline is passed
 void addKeyMulti(char* defline,
                  off_t fpos, uint32 reclen) {
  char* p=defline;
@@ -239,15 +239,15 @@ void addKeyMulti(char* defline,
        if (*p == '\0') break;
        //skip any extraneous characters at the beginning of the token
        while (chrInStr(*p, wordJunk)) p++;
-       //skip any padding spaces or other extraneous characters 
+       //skip any padding spaces or other extraneous characters
        //at the beginning of the word
        if (*p == '\0') break;
        pn=p;
-       while (*pn!='\0' && !isspace(*pn)) pn++; 
+       while (*pn!='\0' && !isspace(*pn)) pn++;
        //found next space or end of string
        fieldno++;
        while (fields[fidx]<fieldno && fidx<numFields-1) fidx++;
-       //GMessage("> p=>'%s' [%d, %d, %d] (next='%s')\n",p, numFields, 
+       //GMessage("> p=>'%s' [%d, %d, %d] (next='%s')\n",p, numFields,
         //      fieldno, fields[numFields-1], pn+1);
        stillParsing = (((*pn)!='\0') && (fieldno+1<=fields[numFields-1]));
        char* pend = pn-1; //pend is on the last non-space in the current token
@@ -255,7 +255,7 @@ void addKeyMulti(char* defline,
        while (chrInStr(*pend, wordJunk) && pend>p) pend--;
        if (pend<pn-1) *(pend+1)='\0';
                  else *pn='\0';
-       
+
        if (strlen(p)>0) {
          if (fields[fidx]==MAX_UINT || fields[fidx]==fieldno) {
            if (useStopWords && stopList.hasKey(p)) {
@@ -390,7 +390,7 @@ void addKeyCompact(char* defline,
  int max_accs=255;
  if (numFields>0) max_accs=numFields;
  for(;;) {
-    //defline is on the first token    
+    //defline is on the first token
     if (strlen(defline)>0) //add whole non-space token as the "full key"
        add_cdbkey(defline, fpos, reclen);
     //add the db|accession constructs as keys
@@ -430,7 +430,7 @@ void addKeyCompact(char* defline,
       dbacc_end=parse_dbacc(dbacc_start, firstacc_end, accst);
       } //parse inside a defline
     // -- get to next concatenated defline, if any:
-    if (compact_plus && nrdb_end!=NULL) { 
+    if (compact_plus && nrdb_end!=NULL) {
       defline=nrdb_end+1; //look for the next nrdb concatenation
       NRDB_Rec(nrdb_end, defline);
       //isolate the first token in this nrdb record
@@ -451,7 +451,7 @@ void addKeyDelim(char* defline,
  char* token_end=endSpToken(defline);
  for(;;) {
     //defline is on the first token
-    if (strlen(defline)==0) break; 
+    if (strlen(defline)==0) break;
     //add the db|accession constructs as keys
     char* k_start=defline;
     char* k_end=NULL;
@@ -535,7 +535,7 @@ int main(int argc, char **argv) {
     fields[numFields]=1;
     numFields++;
     fields[numFields]=MAX_UINT;
-    numFields++;  
+    numFields++;
     }
   caseInsensitive = (args.getOpt('i')!=NULL);
   acc_only=(args.getOpt('a')!=NULL);
@@ -558,13 +558,13 @@ int main(int argc, char **argv) {
     if (numFields>254) GError(ERR_TOOMANYFIELDS);
     if (!acc_only) {
          multikey=1;
-         for (unsigned int i=1;i<=numFields;i++) 
+         for (unsigned int i=1;i<=numFields;i++)
               fields[i-1]=i;
          }
     }
-  
+
   if (argfields!=NULL) { //parse all the field #s
-    if (multikey || keyDelim || compact) 
+    if (multikey || keyDelim || compact)
         GError("%s Error: invalid options (-m, -c/C, -n, -D/-d and -f are exclusive)\n", USAGE);
     char* pbrk;
     int prevnum=0;
@@ -604,7 +604,7 @@ int main(int argc, char **argv) {
          numFields++;
          if (numFields>254) GError(ERR_TOOMANYFIELDS);
          }
-      
+
      prevsep=sep;
      prevnum=num;
      p=pbrk+1;
@@ -612,19 +612,19 @@ int main(int argc, char **argv) {
     if (numFields<=0 || numFields>254 )
               GError("%s Error at parsing -f option.\n", USAGE);
     //GMessage("[%d] Fields parsed (%d values):\n", sizeof(fields[0]), numFields);
-    qsort(fields, numFields, sizeof(fields[0]), &qcmpInt);    
+    qsort(fields, numFields, sizeof(fields[0]), &qcmpInt);
     multikey=1;
     /*-- --------debug:
     for (unsigned int i=0;i<numFields-1;i++) {
       GMessage("%d,", fields[i]);
       }
     GMessage("%d\n",fields[numFields-1]);
-    exit(0); */ 
+    exit(0); */
     } //fields
   if (fastq) {
     record_marker[0]='@';
     record_marker_len=1;
-    } 
+    }
   if (args.getOpt('r')!=NULL) {//non-FASTA record delimiter?
    if (fastq) {
      GMessage("Option -r ignored because -Q was given (-Q sets delimiter to '@')\n");
@@ -632,7 +632,7 @@ int main(int argc, char **argv) {
    else {
    marker=(char*)args.getOpt('r'); //
    int v=0;
-   if (strlen(marker)>126) 
+   if (strlen(marker)>126)
       GError("Error: the specified record delimiter is too long. "
         "Maximum accepted is 126\n");
    //special case: hex (0xXX) and octal codes (\XXX) are accepted, only if by themselves
@@ -667,8 +667,8 @@ int main(int argc, char **argv) {
   if ((zfilename=(char*)args.getOpt('z')) !=NULL) {
     do_compress=true;
     #ifndef ENABLE_COMPRESSION
-      GError("Error: compression requested but not enabled when cdbfasta was compiled\n")
-    #endif    
+      GError("Error: compression requested but not enabled when cdbfasta was compiled\n");
+    #endif
     strcpy(fztmp,zfilename);
     strcat(fztmp,"_ztmp");
     zf=fopen(fztmp,"wb");
@@ -724,7 +724,7 @@ int main(int argc, char **argv) {
   if (keyDelim>0) {
      addKeyFunc=&addKeyDelim;
      }
-   else {  
+   else {
     if (compact)
          addKeyFunc=&addKeyCompact;
       else if (multikey)
@@ -739,8 +739,9 @@ int main(int argc, char **argv) {
   GReadBuf *readbuf = new GReadBuf(f_read, GREADBUF_SIZE);
   if (do_compress) { //---------------- compression case -------------
      if (fastq) GError("Error: sorry, compression is not supported with fastq format\n");
-     //TODO: use a clever block compression/indexing scheme with virtual offsets, like bgzf
+     //TODO: use a better block compression/indexing scheme with virtual offsets, like bgzf
      //      -- this should take care of the fastq compression
+#ifdef COMPRESSION_ENABLED
      fdbsize=0;
      GCdbz cdbz(zf); // zlib interface
      recpos=cdbz.getZRecPos();
@@ -769,7 +770,10 @@ int main(int argc, char **argv) {
        GMessage("Error: unable to rename '%s' to '%s'\n",fztmp,zfilename);
        perror("rename");
        }
-    }  //compression requested  
+#else
+    GError("Error: this program was not compiled with compression enabled.\n");
+#endif
+    }  //compression requested
   else { // not compressed -- plain (buffered) file access
      bool defline=false;
      bool seen_defline=false;
@@ -804,7 +808,7 @@ int main(int argc, char **argv) {
            isEOL=true;
            last_eol_len=1;
            }
-        if (wasEOL && isEOL) { 
+        if (wasEOL && isEOL) {
            //skipped double-char EoL (DOS or empty lines)
            if (prevch=='\n' && ch=='\r') last_eol_len=2;
            prevch=ch;
@@ -830,7 +834,7 @@ int main(int argc, char **argv) {
              else {
               // --> within header, before EOL
               if (kidx>=0) { //still parsing keys
-                if ((isspace(ch) || ch<31) 
+                if ((isspace(ch) || ch<31)
                            && fullDefline==false) {
                        key[kidx]=0;
                        kidx=-1;
@@ -854,9 +858,9 @@ int main(int argc, char **argv) {
               if (seen_defline) {
                  linecounter++; //counting sequence lines
                  if (gFastaSeq && linecounter>1) {
-                        if (last_linelen>first_linelen) 
+                        if (last_linelen>first_linelen)
                                  die_gseqformat(key);
-                        if (last_linelen<first_linelen) 
+                        if (last_linelen<first_linelen)
                                  mustbeLastLine=true;
                         }
                  }
@@ -925,7 +929,7 @@ int main(int argc, char **argv) {
               if (linecounter==0) first_linelen++;
               } // --> record body, before EoL
            } // <=== not in header line
-           
+
         prevch=ch;
         wasEOL=isEOL;
         }//while getch

@@ -66,12 +66,14 @@ const char err_COMPRESSION[]="Error: compression requested but not compiled in!\
 #define ERR_READFMT "cdbyank read error: incorrect file format.\n"
 #define ERR_RANGEFMT "Sequence range parsing error for key '%s'\n"
 #define ERR_RANGE_INVALID "Invalid range (%d-%d) specified for sequence '%s' of length %d\n"
-// 1MB memory buffer:
-#define MAX_MEM_RECSIZE 1048576
+// 64MB memory buffer size:
+//#define MAX_MEM_RECSIZE (1024<<16)
 #ifndef O_BINARY
  #define O_BINARY 0x0000
 #endif
-
+const int MAX_MEM_RECSIZE=(1024<<16);
+//16M buffer
+//const int MAX_MEM_RECSIZE=(1024<<14);
 char* idxfile;
 int warnings;
 bool is_compressed=false;
@@ -130,13 +132,14 @@ int fetch_record(char* key, char* dbname, int many, int r_start=0, int r_end=0) 
    }
  if (r==-1)
    GError("cdbyank: error searching for key %s in %s\n", key, idxfile);
+ char* mbuf=NULL; //memory buffer for reading records
  while (r>0) {
    off_t pos = cdb->datapos(); //position of this key's record in the index file
-   unsigned int len=cdb->datalen(); // length of this key's record 
+   unsigned int len=cdb->datalen(); // length of this key's record
    char bbuf[64]; // data buffer -- should just accomodate fastarec_pos, fastarec_length
    if (cdb->read(bbuf,len,pos) == -1)
        GError("cdbyank: error at GCbd::read (%s)!\n", idxfile);
-       
+
    off_t fpos; //this will be the fastadb offset
    uint32 reclen;  //this will be the fasta record offset
    //int16_t linelen=0; //for genomic sequences, length of FASTA line
@@ -169,18 +172,16 @@ int fetch_record(char* key, char* dbname, int many, int r_start=0, int r_end=0) 
        }
      */
      }
-    //GMessage("reclen=%d\n", reclen);
-
-
+   //GMessage("reclen=%d\n", reclen);
    if (fpos == lastfpos) {
       if (many) r=cdb->findnext(key, strlen(key));
            else r=0;
       continue;
-      }
+   }
    lastfpos=fpos;
    if (showQuery)
     fprintf(fout, "%c%s%c\t", delimQuery, key, delimQuery);
-   if (is_compressed) { 
+   if (is_compressed) {
      #ifdef ENABLE_COMPRESSION
      //for now: ignore special retrievals, just print the whole record
      cdbz->decompress(fout, reclen, fpos);
@@ -188,42 +189,43 @@ int fetch_record(char* key, char* dbname, int many, int r_start=0, int r_end=0) 
          else r=0;
      #endif
      continue;
-     }
+   }
+   if (mbuf==NULL) {
+	   GMALLOC(mbuf, MAX_MEM_RECSIZE);
+   }
    lseek(fdb, fpos, SEEK_SET);
-   if (reclen<=MAX_MEM_RECSIZE) {
-       char* p;
-       GMALLOC(p,reclen+1);
+   if (reclen<MAX_MEM_RECSIZE) {
        //errno=0;
-       r=read(fdb, p, reclen);
+       r=read(fdb, mbuf, reclen);
        if (r<=0)
           GError("cdbyank: Error reading from database file [%s] for %s (returned %d, offset %d) !\n",
                   dbname, idxfile, r, fpos);
-       p[reclen]='\0';
+       mbuf[reclen]='\0';
        //--- now we have the whole record, check if some special options were given:
        if (defline_only) {
-         char* q=strchr(p,'\n');
+         char* q=strchr(mbuf,'\n');
          if (q!=NULL) *q='\0';
          //skip '>' char
-         fprintf(fout, "%s\n",p+1);
+         fprintf(fout, "%s\n",mbuf+1);
          }
         else
          if (use_range && r_start>0) { //range case
            if (r_end<=0) r_end=reclen;
            //extract only a substring of the sequence
-           char* r=strchr(p,'\n');
+           char* r=strchr(mbuf,'\n');
            if (r!=NULL) *r='\0'; //now p only has the defline
-           fprintf(fout, "%s\n", p); //output the defline
+           fprintf(fout, "%s\n", mbuf); //output the defline
            r++;
-           unsigned int recpos=r-p; //p[recpos] MUST be a nucleotide or aminoacid now!
+           unsigned int recpos=r-mbuf; //p[recpos] MUST be a nucleotide or aminoacid now!
            int seqpos=0;
            char linebuf[61];
            int linelen=0;
            while (recpos<reclen) {
-              if (isspace(p[recpos])) recpos++; //skip newlines, etc. in the fasta sequence
+              if (isspace(mbuf[recpos])) recpos++; //skip newlines, etc. in the fasta sequence
                  else {
                     seqpos++;
                     if (seqpos>=r_start && seqpos<=r_end) {
-                      linebuf[linelen]=p[recpos];
+                      linebuf[linelen]=mbuf[recpos];
                       linelen++;
                       if (linelen==60 || seqpos==r_end) {
                          linebuf[linelen]='\0';
@@ -240,53 +242,72 @@ int fetch_record(char* key, char* dbname, int many, int r_start=0, int r_end=0) 
                linelen=0;
                fprintf(fout, "%s\n", linebuf);
                }
-           }
-        else { //not range display
-         fprintf(fout, "%s\n",p);
          }
-       GFREE(p);
+        else { //full record printing in one shot
+           fprintf(fout, "%s\n",mbuf);
+         }
+       GFREE(mbuf);
       } //small record
-    else { //large record, read it char by char and return it as output
+    else { //large record, read it in chunks
      char c='\0';
-     if (defline_only) {
-     	  reclen--;
-     	  read(fdb, &c, 1);
-     	  }
-     while (reclen-- && read(fdb, &c, 1)==1) {
-       fprintf(fout, "%c", c);
-       if (c=='\n') break;
-       }
-     //defline written
-     if (!defline_only) {
-      int seqpos=1;
-      if (use_range) {
-         while (reclen-- && read(fdb, &c, 1)==1 && seqpos<=r_end) {
-           if (isspace(c)) continue;
-           if (seqpos>=r_start) {
-              int written=seqpos-r_start;
-              if (written && written%60 == 0)
-                   fprintf(fout,"\n");
-              fprintf(fout, "%c", c);
-              }
-           seqpos++;
-           }//while
-         } //range case
-       else { //no range, just copy all chars to output
-         while (reclen-- && read(fdb, &c, 1)==1) {
-            fprintf(fout, "%c", c);
-            }
-         }
-       fprintf(fout, "\n");
-       }
-     }
+     if (defline_only || use_range) {
+		 if (defline_only) {
+			  reclen--;
+			  read(fdb, &c, 1);
+		 }
+		 while (reclen-- && read(fdb, &c, 1)==1) {
+		   fprintf(fout, "%c", c);
+		   if (c=='\n') break;
+		 }
+		 //defline written
+		 if (!defline_only) {
+			 int seqpos=1;
+			 if (use_range) {
+				 while (reclen-- && read(fdb, &c, 1)==1 && seqpos<=r_end) {
+					 if (isspace(c)) continue;
+					 if (seqpos>=r_start) {
+						 int written=seqpos-r_start;
+						 if (written && written%70 == 0)
+							 fprintf(fout,"\n");
+						 fprintf(fout, "%c", c);
+					 }
+					 seqpos++;
+				 }//while
+			 } //range case
+			 else { //no range, just copy all chars to output
+				 while (reclen-- && read(fdb, &c, 1)==1) {
+					 fprintf(fout, "%c", c);
+				 }
+			 }
+			 fprintf(fout, "\n");
+		 }
+     } else { //entire record I/O in MAX_MEM_RECSIZE-1 chunks
+    	 uint toread=MAX_MEM_RECSIZE-1;
+    	 uint rleft=reclen;
+    	 while (rleft>0) {
+    		 r=read(fdb, mbuf, toread);
+    		 if (r<=0)
+    			 GError("cdbyank: Error reading from database file [%s] for %s (returned %d, offset %d) !\n",
+    				 dbname, idxfile, r, fpos);
+    		 toread=r;
+    		 mbuf[toread]='\0';
+    		 fprintf(fout, "%s", mbuf);
+    		 rleft-=toread;
+    		 if (rleft<MAX_MEM_RECSIZE)
+    			 toread=rleft;
+    	 } //while chunks to read
+    	 fprintf(fout, "\n");
+     } //entire record
+   } //large record
    if (many) r=cdb->findnext(key, strlen(key));
         else r=0;
-   }
+ } //for each matching record
+ GFREE(mbuf);
  return 1;
 }
 
 int read_dbinfo(int fd, char** fnameptr, cdbInfo& dbstat) {
-//this is messy due to the need of compatibility with the 
+//this is messy due to the need of compatibility with the
 //old 32bit file-length
        char* dbname=*fnameptr;
        //read just the tag first: 4 bytes ID
@@ -334,7 +355,7 @@ int parse_int(FILE* f, char* buf, char* key, int& e) {
    while (e!=EOF && isspace(e)) { //skip any spaces
      if (e=='\n') return 0; //GError(ERR_RANGEFMT, key);
      e=fgetc(stdin);
-     } 
+     }
    if (e==EOF) return 0; //GError(ERR_RANGEFMT, key);
    //now e is the first non-space
    p=buf;
@@ -357,7 +378,7 @@ int parse_int(char*& f, char* key, int& e) {
      if (e=='\n') return 0;
      f++;
      e=*f;
-     } 
+     }
    //if (e=='\0') GError(ERR_RANGEFMT, key);
    if (e=='\0') return 0;
    //now e is the first non-space char
@@ -367,7 +388,7 @@ int parse_int(char*& f, char* key, int& e) {
      *q=e;
      q++;
      f++;
-     e=*f;     
+     e=*f;
      }
    *q='\0';
    return atoi(p);
@@ -387,12 +408,12 @@ GCdbz* openCdbz(char* p) {
           }
     //check if the file is valid and read the length of the first record
     //
-    char ztag[5]; 
-    ztag[4]='\0';   
+    char ztag[5];
+    ztag[4]='\0';
     if (fread(ztag, 1, 4, zf)<4) {
        GMessage("Error reading header of compressed file '%s'\n",p);
        return NULL;
-       }      
+       }
     if (strcmp(ztag, "CDBZ")!=0) {
        GMessage("Error: file '%s' doesn't appear to be a zlib compressed cdb?\n",p);
        return NULL;
@@ -421,7 +442,7 @@ int main(int argc, char **argv) {
   if (e>0)
      GError("%s Invalid argument: %s\n", USAGE, argv[e]);
   if (args.getOpt('v')!=NULL) {
-    printf("%s\n",VERSION); 
+    printf("%s\n",VERSION);
     return 0;
     }
   char* outfile=(char*)args.getOpt('o');
@@ -429,7 +450,7 @@ int main(int argc, char **argv) {
       if ((fout=fopen(outfile, "wb"))==NULL)
          GError("Cannot create file '%s'!", outfile);
       }
-    else fout=stdout;  
+    else fout=stdout;
 
   if ((p=(char*)args.getOpt('z'))!=NULL) { //simply stream-decompress cdbz
   #ifndef ENABLE_COMPRESSION
@@ -463,7 +484,7 @@ int main(int argc, char **argv) {
     GFREE(idxfile_cidx);
     }
   char* key=(char*)args.getOpt('a');
-  
+
   defline_only=(args.getOpt('F')!=NULL);
   rec_pos_only=(args.getOpt('P')!=NULL);
   showQuery=(args.getOpt('Q')!=NULL);
@@ -475,7 +496,7 @@ int main(int argc, char **argv) {
   use_range=((args.getOpt('R')!=NULL) || (args.getOpt('E')!=NULL));
   fixed_linelen=(args.getOpt('E')!=NULL);
   caseInsensitive=(args.getOpt('i')!=NULL);
-  /*is_compressed=((args.getOpt('Z')!=NULL) || 
+  /*is_compressed=((args.getOpt('Z')!=NULL) ||
                 (strstr(idxfile,".cidxz")!=NULL));*/
   int listQuery=(args.getOpt('l')!=NULL);
   warnings=(args.getOpt('w')!=NULL);
@@ -489,7 +510,7 @@ int main(int argc, char **argv) {
  char* info_dbname=NULL;
  off_t db_size=0;
  dbstat.dbsize=0;
- 
+
  r=read_dbinfo(fd, &info_dbname, dbstat);
  lseek(fd, 0, SEEK_SET);
  if (r==1) GError("This file does not seem to be a cdbfasta generated file.\n");
@@ -600,7 +621,7 @@ int main(int argc, char **argv) {
             }
            else { //extend the key string
             key[keypos]=e;
-            keypos++; 
+            keypos++;
             }
           } //while
          } //range case
@@ -614,7 +635,7 @@ int main(int argc, char **argv) {
             }
            else { //extend the key string
             key[keypos]=e;
-            keypos++; 
+            keypos++;
             }
           } //while
        }
@@ -645,7 +666,7 @@ int main(int argc, char **argv) {
     //end data query:
     if (!rec_pos_only) {
         if (is_compressed) {
-         fclose(fz); 
+         fclose(fz);
          #ifdef ENABLE_COMPRESSION
          delete cdbz;
          #endif
@@ -697,7 +718,7 @@ int main(int argc, char **argv) {
                 printf("Database records are compressed.\n");
             if (dbstat.idxflags & CDBMSK_OPT_MULTI)
                 printf("Index was built with \"multi-key\" option enabled.\n");
-            if (dbstat.idxflags & CDBMSK_OPT_GSEQ) 
+            if (dbstat.idxflags & CDBMSK_OPT_GSEQ)
                 printf("Line length information is stored for each record.\n");
             if (dbstat.idxflags & CDBMSK_OPT_C)
                 printf("Index was built with \"shortcut keys\" only.\n");
