@@ -256,8 +256,6 @@ class GCdbRead {
   //struct mcdb_mmap *map;
   char *map;         // ptr, mmap pointer
     uintptr_t size; // mmap size, initialized if map is nonzero
-    uint32_t b;   // hash table stride bits: (data < 4GB) ? 3 : 4
-    uint32_t n;   // num records in mcdb
 
   uint32 loop; // number of hash slots searched under this key
   uint32 hslots; // initialized if loop is nonzero
@@ -267,7 +265,6 @@ class GCdbRead {
   uintptr_t dpos; // initialized if cdb_findnext() returns 1
 
   uint32 dlen; // initialized if cdb_findnext() returns 1
-  uint32 klen; // initialized if cdb_findnext() returns 1
 
   uint32 khash; // initialized if loop is nonzero
 
