@@ -99,7 +99,7 @@ static int gcdb_seek_set(int fd,gcdb_seek_pos pos) {
 #define gcdb_seek_begin(fd) (gcdb_seek_set((fd),(gcdb_seek_pos) 0))
 
 static unsigned int gcdb_strlen(const char *s) {
-  register char *t;
+  char *t;
   t = (char*)s;
   for (;;) {
     if (!*t) return t - s;
