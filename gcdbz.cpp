@@ -110,7 +110,6 @@ char* GCdbz::compress(GReadBuf *readbuf, char* delim) {
   // (exactly as left after a previous call)
  if (zf==NULL || uncompress)
     GError("GCdbz Error: cannot use compress() method !\n");
- unsigned int total_out=0;
  int c=0;
  bool in_rec=true;
  int delimlen=strlen(delim);
@@ -165,7 +164,6 @@ char* GCdbz::compress(GReadBuf *readbuf, char* delim) {
         if (toWrite>0) {
              if (fwrite(lbuf, 1, toWrite, zf)<toWrite)
                 GError("Error writing deflate chunk!\n");
-             total_out+=toWrite;
              zrecsize+=toWrite;
              zpos+=toWrite;
              }
